@@ -1,5 +1,5 @@
 language: node_js
-script:
+before_deploy:
 - npm run build
 deploy:
   provider: elasticbeanstalk
