@@ -6,9 +6,9 @@ import * as Http from 'http';
 /**
  * Configuration environment variables and defaults.
  */
-const PORT = parseInt(process.env.WS_PORT || 8081);
-const REDIS_URL = process.env.WS_REDIS_URL;
-const LOG_LEVEL = process.env.WS_LOG_LEVEL;
+const PORT = parseInt(process.env.PORT || 8081);
+const REDIS_URL = process.env.REDIS_URL;
+const LOG_LEVEL = process.env.LOG_LEVEL;
 if (LOG_LEVEL !== undefined) {
   Log.setLevel(LOG_LEVEL);
 }
