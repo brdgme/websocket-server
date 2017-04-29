@@ -1,6 +1,7 @@
 import * as WebSocket from 'ws';
 import * as Redis from 'redis';
 import * as Log from 'loglevel';
+import * as Http from 'http';
 
 /**
  * Configuration environment variables and defaults.
@@ -130,9 +131,19 @@ let subscriptions = new Subscriptions();
 redis.on('message', subscriptions.handleMessage);
 
 /**
- * Listen for WebSocket connections.
+ * Listen for WebSocket connections. We use a custom connection to reply 200 by
+ * default so Elastic Beanstalk can assume it's healthy.
  */
-const wss = new WebSocket.Server({ port: PORT });
+let server = Http.createServer((req, res) => {
+  const body = '';
+  res.writeHead(200, {
+    'Content-Length': body.length,
+    'Content-Type': 'text/plain',
+  });
+  res.end(body);
+});
+server.listen(PORT);
+const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
   const subReq = wsSub(ws);
   // Wildcards are unsupported.
