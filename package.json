@@ -1,0 +1,34 @@
+{
+  "name": "brdgme-websocket-server",
+  "version": "0.1.0",
+  "description": "WebSocket server for brdg.me",
+  "main": "app.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "start-dev": "WS_LOG_LEVEL=debug node dist/index.js",
+    "build": "node_modules/.bin/tsc",
+    "dev": "node_modules/.bin/tsc -w",
+    "clean": "rm -rf dist",
+    "test": "echo \"No tests\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brdgme/websocket-server.git"
+  },
+  "author": "Michael Alexander <beefsack@gmail.com>",
+  "license": "Apache-2.0 OR MIT",
+  "bugs": {
+    "url": "https://github.com/brdgme/websocket-server/issues"
+  },
+  "homepage": "https://github.com/brdgme/websocket-server#readme",
+  "dependencies": {
+    "@types/loglevel": "^1.4.29",
+    "@types/redis": "^0.12.36",
+    "@types/ws": "0.0.40",
+    "bufferutil": "^3.0.0",
+    "loglevel": "^1.4.1",
+    "redis": "^2.7.1",
+    "typescript": "^2.3.2",
+    "ws": "^2.3.1"
+  }
+}
