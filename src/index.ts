@@ -34,75 +34,105 @@ function hasPrefix(p: string, str: string): boolean {
 }
 
 /**
- * `wsSub` extracts the subscription name from the WebSocket request URL.
- * @param {WebSocket} ws
- */
-function wsSub(ws: WebSocket): string {
-  return (ws.upgradeReq.url || '/').substr(1);
-}
-
-/**
- * `allowedPrefixes` is the predefined list of which URL prefixes are allowed.
- * @var {array<string>}
- */
-const allowedPrefixes = [
-  'user.',
-  'game.',
-];
-
-/**
  * `Subscriptions` tracks all WebSocket connections against their subscription
  * names.
  */
 class Subscriptions {
-  subs: {
-    [sub: string]: WebSocket[],
+  channels: {
+    [channel: string]: WebSocket[],
   };
 
   constructor() {
-    this.subs = {};
+    this.channels = {};
     this.handleMessage = this.handleMessage.bind(this);
   }
 
   /**
-   * `subscribe` takes a `WebSocket` object, extracts a subscription name, and
-   * subscribes to Redis if it's not already subscribed.
+   * `subscribe` takes a `WebSocket` object and a channel name, and subscribes
+   * to Redis if it's not already subscribed.
    * @param {WebSocket} ws 
+   * @param {string} channel
    */
-  subscribe(ws: WebSocket) {
-    const sub = wsSub(ws);
-    if (this.subs[sub] === undefined) {
-      this.subs[sub] = [];
-      if (!redis.subscribe(sub)) {
-        throw(`failed to subscribe: ${sub}`);
+  subscribe(ws: WebSocket, channel: string) {
+    if (this.channels[channel] === undefined) {
+      this.channels[channel] = [];
+      if (!redis.subscribe(channel)) {
+        throw(`failed to subscribe: ${channel}`);
       }
     }
-    this.subs[sub].push(ws);
-    Log.info(`Subscribed ${sub}`);
+    this.channels[channel].push(ws);
+    Log.info(`Subscribed ${channel}`);
   }
 
   /**
-   * `subscribe` takes a `WebSocket` object, extracts a subscription name, and
-   * unsubscribes from Redis if it's the last subscription by this name.
-   * @param {WebSocket} ws 
+   * `unsubscribe` takes a `WebSocket` object and a channel name and
+   * unsubscribes from Redis if it's the last subscription of this channel.
+   * @param {WebSocket} ws
+   * @param {string} channel
    */
-  unsubscribe(ws: WebSocket) {
-    const sub = wsSub(ws);
-    if (this.subs[sub] === undefined) {
+  unsubscribe(ws: WebSocket, channel: string) {
+    if (this.channels[channel] === undefined) {
       return;
     }
-    const index = this.subs[sub].indexOf(ws);
+    const index = this.channels[channel].indexOf(ws);
     if (index === -1) {
       return;
     }
-    this.subs[sub].splice(index, 1);
-    if (this.subs[sub].length === 0) {
-      delete this.subs[sub];
-      if (!redis.unsubscribe(sub)) {
-        throw(`failed to unsubscribe: ${sub}`);
+    this.channels[channel].splice(index, 1);
+    if (this.channels[channel].length === 0) {
+      delete this.channels[channel];
+      if (!redis.unsubscribe(channel)) {
+        throw(`failed to unsubscribe: ${channel}`);
       }
     }
-    Log.info(`Unsubscribed ${sub}`);
+    Log.info(`Unsubscribed ${channel}`);
+  }
+
+  /**
+   * `unsubscribeAll` takes a `WebSocket` object and unsubscribes from all
+   * channels this websocket is subscribed to.
+   * @param {WebSocket} ws
+   */
+  unsubscribeAll(ws: WebSocket) {
+    for (let channel in this.channels) {
+      if (this.channels[channel].indexOf(ws) !== -1) {
+        this.unsubscribe(ws, channel);
+      }
+    }
+  }
+
+  /**
+   * `unsubscribePrefix` takes a `WebSocket` object and a channel prefix and
+   * unsubscribes the websocket from all channels it is subscribed to matching
+   * the prefix.
+   * @param {WebSocket} ws
+   * @param {string} prefix
+   */
+  unsubscribePrefix(ws: WebSocket, prefix: string) {
+    for (let channel in this.channels) {
+      if (hasPrefix(prefix, channel)
+        && this.channels[channel].indexOf(ws) !== -1) {
+        this.unsubscribe(ws, channel);
+      }
+    }
+  }
+
+  /**
+   * `unsubscribeUser` takes a `WebSocket` object and unsubscribes it from all
+   * user channels it is subscribed to.
+   * @param {WebSocket} ws
+   */
+  unsubscribeUser(ws: WebSocket) {
+    this.unsubscribePrefix(ws, 'user.');
+  }
+
+  /**
+   * `unsubscribeGame` takes a `WebSocket` object and unsubscribes it from all
+   * game channels it is subscribed to.
+   * @param {WebSocket} ws
+   */
+  unsubscribeGame(ws: WebSocket) {
+    this.unsubscribePrefix(ws, 'game.');
   }
 
   /**
@@ -112,12 +142,12 @@ class Subscriptions {
    * @param {string} message 
    */
   handleMessage(channel: string, message: string) {
-    if (this.subs[channel] === undefined) {
+    if (this.channels[channel] === undefined) {
       Log.debug(`Got message for channel ${channel}, but no subscribers`);
       return;
     }
-    Log.debug(`Sending message to ${this.subs[channel].length} subscribers on '${channel}': ${message}`);
-    for (const ws of this.subs[channel]) {
+    Log.debug(`Sending message to ${this.channels[channel].length} subscribers on '${channel}': ${message}`);
+    for (const ws of this.channels[channel]) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(message);
       }
@@ -144,27 +174,59 @@ let server = Http.createServer((req, res) => {
 });
 server.listen(PORT);
 const wss = new WebSocket.Server({ server });
-wss.on('connection', (ws) => {
-  const subReq = wsSub(ws);
-  // Wildcards are unsupported.
-  if (subReq.indexOf('*') !== -1) {
-    ws.terminate();
+wss.on('connection', handleConnection);
+
+/**
+ * Handles an inbound connection, listening for messages to control Redis
+ * subscriptions.
+ */
+function handleConnection(ws: WebSocket) {
+  ws.on('message', (message) => handleMessage(ws, message));
+  ws.on('close', () => handleClose(ws));
+}
+
+/**
+ * Handles an inbound message, which manage Redis subscriptions for connections.
+ */
+function handleMessage(ws: WebSocket, message: string) {
+  Log.trace(`Inbound message: ${message}`);
+  let data = {};
+  try {
+    data = JSON.parse(message);
+  } catch (e) {
+    Log.debug(`Could not parse JSON message: ${message}`);
     return;
   }
-  // Only certain prefixes are allowed.
-  let allowed = false;
-  for (const p of allowedPrefixes) {
-    if (hasPrefix(p, subReq)) {
-      allowed = true;
-      break;
-    }
+  switch (data['type']) {
+    case "brdgme/ws/SUBSCRIBE_USER":
+      if (data['payload'] === undefined) {
+        Log.debug(`Message does not have payload: ${message}`);
+        return;
+      }
+      subscriptions.subscribe(ws, `user.${data['payload']}`);
+      return;
+    case "brdgme/ws/UNSUBSCRIBE_USER":
+      subscriptions.unsubscribeUser(ws);
+      return;
+    case "brdgme/ws/SUBSCRIBE_GAME":
+      if (data['payload'] === undefined) {
+        Log.debug(`Message does not have payload: ${message}`);
+        return;
+      }
+      subscriptions.subscribe(ws, `game.${data['payload']}`);
+      return;
+    case "brdgme/ws/UNSUBSCRIBE_GAME":
+      subscriptions.unsubscribeGame(ws);
+      return;
+    default:
+      Log.debug(`Invalid message type: ${message}`);
+      return;
   }
-  if (!allowed) {
-    ws.terminate();
-    return;
-  }
-  ws.on('close', () => {
-    subscriptions.unsubscribe(ws);
-  });
-  subscriptions.subscribe(ws);
-});
+}
+
+/**
+ * Handles the close of a websocket, unsubscribing it from all subscriptions.
+ */
+function handleClose(ws: WebSocket) {
+  subscriptions.unsubscribeAll(ws);
+}
