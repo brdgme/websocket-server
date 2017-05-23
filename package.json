@@ -6,7 +6,7 @@
   "scripts": {
     "prestart": "npm run build",
     "start": "node dist/index.js",
-    "start-dev": "LOG_LEVEL=debug node dist/index.js",
+    "start-dev": "npm run prestart && LOG_LEVEL=debug node dist/index.js",
     "build": "node_modules/.bin/tsc",
     "dev": "node_modules/.bin/tsc -w",
     "clean": "rm -rf dist",
