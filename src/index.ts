@@ -146,7 +146,7 @@ class Subscriptions {
       Log.debug(`Got message for channel ${channel}, but no subscribers`);
       return;
     }
-    Log.debug(`Sending message to ${this.channels[channel].length} subscribers on '${channel}': ${message}`);
+    Log.debug(`Sending message to ${this.channels[channel].length} subscribers on '${channel}'`);
     for (const ws of this.channels[channel]) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(message);
