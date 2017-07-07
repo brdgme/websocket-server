@@ -7,8 +7,8 @@
     "prestart": "npm run build",
     "start": "node dist/index.js",
     "start-dev": "npm run prestart && LOG_LEVEL=debug node dist/index.js",
-    "build": "node_modules/.bin/tsc",
-    "dev": "node_modules/.bin/tsc -w",
+    "build": "node_modules/typescript/bin/tsc",
+    "dev": "node_modules/typescript/bin/tsc -w",
     "clean": "rm -rf dist",
     "test": "echo \"No tests\""
   },
