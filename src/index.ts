@@ -8,7 +8,7 @@ import * as Http from 'http';
  */
 const PORT = parseInt(process.env.PORT || '8081');
 const REDIS_URL = process.env.REDIS_URL;
-const LOG_LEVEL = process.env.LOG_LEVEL;
+const LOG_LEVEL = process.env.LOG_LEVEL as Log.LogLevelDesc;
 if (LOG_LEVEL !== undefined) {
   Log.setLevel(LOG_LEVEL);
 }
@@ -21,7 +21,7 @@ let redis: Redis.RedisClient;
 if (REDIS_URL) {
   redis = Redis.createClient(REDIS_URL);
 } else {
-  redis = Redis.createClient(); 
+  redis = Redis.createClient();
 }
 
 /**
@@ -57,7 +57,7 @@ class Subscriptions {
     if (this.channels[channel] === undefined) {
       this.channels[channel] = [];
       if (!redis.subscribe(channel)) {
-        throw(`failed to subscribe: ${channel}`);
+        throw (`failed to subscribe: ${channel}`);
       }
     }
     this.channels[channel].push(ws);
@@ -82,7 +82,7 @@ class Subscriptions {
     if (this.channels[channel].length === 0) {
       delete this.channels[channel];
       if (!redis.unsubscribe(channel)) {
-        throw(`failed to unsubscribe: ${channel}`);
+        throw (`failed to unsubscribe: ${channel}`);
       }
     }
     Log.info(`Unsubscribed ${channel}`);
